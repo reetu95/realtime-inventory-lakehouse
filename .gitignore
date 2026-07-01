@@ -1,0 +1,8 @@
+venv/
+realtime/
+producer/realtime/
+online_retail_II.xlsx
+producer/online_retail_II.xlsx
+.env
+__pycache__/
+.DS_Store
