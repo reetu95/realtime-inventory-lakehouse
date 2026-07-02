@@ -66,6 +66,7 @@ data is a freshness problem, not a quality problem. Deduplication uses
 chosen to exceed the producer's simulated 2-hour lateness.
 
 ![Silver reconciliation](docs/img/silver-reconciliation.png)
+![Quarantine breakdown](docs/img/negative-restock.png)
 
 **Reconciliation:** 3,275 clean + 431 quarantined = 3,706 Bronze rows.
 Quarantine breakdown: 315 negative_restock, 116 missing_product_id.
