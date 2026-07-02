@@ -45,8 +45,12 @@ dbt tests · Power BI
 
 ## Repo structure
 
+```
 producer/
   prep_reference_data.py   # cleans the Kaggle xlsx → reference CSVs
   producer.py              # streams events to Kafka
   ref_products.csv
   ref_warehouses.csv
+docs/
+  img/                     # screenshots
+```
