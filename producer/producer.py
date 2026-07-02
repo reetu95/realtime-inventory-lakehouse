@@ -65,6 +65,14 @@ def make_inventory_movement():
     product = random.choice(PRODUCTS)
     warehouse = random.choice(WAREHOUSES)
 
+    movement_type = random.choice(MOVEMENT_TYPES)
+    if movement_type in ("SALE", "TRANSFER"):
+        quantity_change = -random.randint(1, 50)      # stock leaves
+    elif movement_type in ("RESTOCK", "RETURN"):
+        quantity_change = random.randint(10, 100)     # stock arrives
+    else:  # ADJUSTMENT: correction, either direction
+        quantity_change = random.choice([-1, 1]) * random.randint(1, 20)
+
     return {
         "event_id": str(uuid.uuid4()),
         "event_type": "inventory_movement",
@@ -72,8 +80,8 @@ def make_inventory_movement():
         "product_description": product["description"],
         "warehouse_id": warehouse["warehouse_id"],
         "warehouse_country": warehouse["country"],
-        "movement_type": random.choice(MOVEMENT_TYPES),
-        "quantity_change": random.randint(-50, 100),
+        "movement_type": movement_type,
+        "quantity_change": quantity_change,
         "event_timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
