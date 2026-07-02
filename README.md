@@ -41,6 +41,8 @@ dbt tests · Power BI
 - [ ] dbt tests + freshness alerting
 - [ ] CI/CD: GitHub Actions + Databricks Asset Bundles
 
+## Week 1 milestone
+
 ![Events flowing in Confluent Cloud](docs/img/confluent-messages.png)
 
 ## Repo structure
