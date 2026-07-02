@@ -10,15 +10,17 @@ exercise the data quality layer.
 
 ## Architecture
 
+```
 Python event producer (simulated ERP)
         ↓
-Kafka — Confluent Cloud (topic: inventory-events, 3 partitions)
+Kafka — Confluent Cloud  (topic: inventory-events, 3 partitions)
         ↓
 Spark Structured Streaming (Databricks)
         ↓
 Bronze → Silver → Gold Delta tables
         ↓
 dbt tests · Power BI
+```
 
 ## Event types
 
