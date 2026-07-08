@@ -2,6 +2,7 @@
 
 Streaming pipeline: Python producer → Kafka (Confluent Cloud) → Spark
 Structured Streaming → Delta Lake (Bronze/Silver/Gold) on Databricks.
+Azure infrastructure built with Terraform.
 
 Dimensions are seeded from the real **Online Retail II** dataset (~1M UK
 e-commerce transactions). The event stream is simulated against those real
@@ -20,6 +21,8 @@ Spark Structured Streaming (Databricks)
 Bronze → Silver → Gold Delta tables
         ↓
 dbt tests · Power BI
+
+Azure infra (resource group, ADLS Gen2, Key Vault) — provisioned by Terraform
 ```
 
 ## Event types
@@ -37,7 +40,7 @@ dbt tests · Power BI
 - [x] Structured Streaming ingestion → Bronze Delta (exactly once verified: 3706/3706, 0 duplicates)
 - [x] Silver: validation, deduplication, quarantine (reconciled: 3,275 clean + 431 quarantined = 3,706)
 - [x] Gold: streaming stock aggregate + SCD Type 2 dim_product (589 rows, 300 products, invariant holds)
-- [ ] Terraform: Azure infra (ADLS, Key Vault, Databricks)
+- [x] Terraform: Azure infra — resource group, ADLS Gen2, Key Vault with secrets (12 resources, idempotent)
 - [ ] dbt tests + freshness alerting
 - [ ] CI/CD: GitHub Actions + Databricks Asset Bundles
 
@@ -139,6 +142,46 @@ a session restart, and a spelling mistake in a column name
 with `DELTA_METADATA_MISMATCH`. The column was renamed in place using
 Delta column mapping.
 
+## Week 4 milestone — Terraform: Azure infrastructure as code
+
+The Azure platform for this project is built entirely from code. No
+clicking in the portal. One `terraform apply` command creates 12
+resources: a resource group, an ADLS Gen2 storage account with the four
+medallion containers (landing, bronze, silver, gold), and a Key Vault
+that holds the Kafka credentials as secrets.
+
+![Terraform apply](docs/img/terraform-apply.png)
+
+Both were verified from the command line: the four containers exist, and
+the three secrets are in the vault (only the names are visible — the
+values stay hidden, which is the point of a vault).
+
+![Verification — containers](docs/img/terraform-verification-storage.png)
+![Verification — secrets](docs/img/terraform-verification-keyvault.png)
+
+Running `terraform plan` again returns **"No changes. Your infrastructure
+matches the configuration."** That is what idempotent means: the code is
+the source of truth, and Terraform only acts when reality differs from
+the code. One command (`terraform destroy`) can remove everything.
+
+![No changes](docs/img/terraform-no-changes.png)
+
+### Design notes for this week
+
+- **Scoped provider registration:** on a fresh subscription, Terraform's
+  first run tried to register ~60 Azure resource providers. That was slow
+  and hit conflicts. Fix: register only the three providers this project
+  uses (Storage, KeyVault, Resources).
+- **Secrets never touch git:** `terraform.tfvars` (the input secrets) and
+  `terraform.tfstate` (which stores secret values in plain text) are
+  gitignored. For a solo project, local state is fine; in a team, state
+  would live in a remote backend with locking.
+- **Honest limitation:** Databricks Free Edition cannot read Key Vault
+  secrets (that needs Azure Databricks). So the notebooks still hold
+  credentials as constants, while the vault is the production-ready home.
+  On Azure Databricks, a Key Vault-backed secret scope would replace the
+  constants with `dbutils.secrets.get()` calls.
+
 ## Design notes
 
 - **Trigger choice:** Bronze, Silver, and Gold run with `availableNow`
@@ -157,9 +200,9 @@ Delta column mapping.
 - **Bronze keeps `raw_json`:** the raw payload is kept so events can be
   re-parsed later if the schema changes. Bronze is the replayable source
   of truth.
-- **Secrets:** Kafka credentials are still constants in the notebooks.
-  Moving them to Key Vault backed secret scopes is planned in the
-  Terraform phase.
+- **Secrets:** Kafka credentials are now provisioned into Azure Key Vault
+  via Terraform (see Week 4). The Free Edition notebooks still use
+  constants because Free Edition cannot read the vault.
 
 ## Repo structure
 
@@ -174,6 +217,11 @@ databricks/
   02_silver_quality.py     # validation, quarantine, streaming dedup
   03_gold_stock_levels.py  # running stock aggregate per product × warehouse
   04_gold_dim_product.py   # SCD Type 2 dimension via foreachBatch + MERGE
+infra/
+  providers.tf             # Terraform + Azure provider setup
+  variables.tf             # project name, region, Kafka secret inputs
+  main.tf                  # resource group, ADLS Gen2, containers, Key Vault, secrets
+  outputs.tf               # names and URIs printed after apply
 docs/
   img/                     # screenshots
 ```
