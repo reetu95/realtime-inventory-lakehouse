@@ -6,3 +6,7 @@ producer/online_retail_II.xlsx
 .env
 __pycache__/
 .DS_Store
+infra/terraform.tfvars
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
