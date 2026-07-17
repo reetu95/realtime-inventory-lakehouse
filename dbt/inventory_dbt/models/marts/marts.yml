@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: low_stock_alerts
+    description: "Products with fewer than 10 units in a warehouse"
+    columns:
+      - name: product_id
+        tests:
+          - not_null
+  - name: quarantine_summary
+    description: "Count of rejected events by reason"
+    columns:
+      - name: quarantine_reason
+        tests:
+          - unique
+          - not_null

@@ -10,3 +10,7 @@ infra/terraform.tfvars
 infra/.terraform/
 infra/*.tfstate
 infra/*.tfstate.backup
+dbt/inventory_dbt/target/
+dbt/inventory_dbt/logs/
+dbt/inventory_dbt/dbt_packages/
+dbt/logs/

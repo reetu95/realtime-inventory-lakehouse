@@ -1,0 +1,49 @@
+version: 2
+
+sources:
+  - name: silver
+    catalog: workspace
+    schema: silver
+    tables:
+      - name: inventory_events
+        columns:
+          - name: event_id
+            tests:
+              - not_null
+              - unique
+          - name: event_type
+            tests:
+              - accepted_values:
+                  values: ['inventory_movement', 'price_update']
+          - name: product_id
+            tests:
+              - not_null
+      - name: inventory_events_quarantine
+        columns:
+          - name: quarantine_reason
+            tests:
+              - not_null
+
+  - name: gold
+    catalog: workspace
+    schema: gold
+    tables:
+      - name: stock_levels
+        columns:
+          - name: product_id
+            tests:
+              - not_null
+          - name: warehouse_id
+            tests:
+              - not_null
+      - name: dim_product
+        columns:
+          - name: product_id
+            tests:
+              - not_null
+          - name: unit_price
+            tests:
+              - not_null
+          - name: is_current
+            tests:
+              - not_null
