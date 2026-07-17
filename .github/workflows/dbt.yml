@@ -1,0 +1,43 @@
+name: dbt tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dbt-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dbt
+        run: pip install dbt-databricks
+
+      - name: Write dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << EOF
+          inventory_dbt:
+            target: ci
+            outputs:
+              ci:
+                type: databricks
+                catalog: workspace
+                schema: gold
+                host: ${{ secrets.DBT_HOST }}
+                http_path: ${{ secrets.DBT_HTTP_PATH }}
+                token: ${{ secrets.DBT_TOKEN }}
+                threads: 1
+          EOF
+
+      - name: Run dbt build
+        working-directory: dbt/inventory_dbt
+        run: dbt build
