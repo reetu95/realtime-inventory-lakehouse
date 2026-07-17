@@ -2,7 +2,7 @@
 
 Streaming pipeline: Python producer → Kafka (Confluent Cloud) → Spark
 Structured Streaming → Delta Lake (Bronze/Silver/Gold) on Databricks.
-Azure infrastructure built with Terraform.
+Azure infrastructure built with Terraform. Data quality enforced with dbt.
 
 Dimensions are seeded from the real **Online Retail II** dataset (~1M UK
 e-commerce transactions). The event stream is simulated against those real
@@ -41,7 +41,7 @@ Azure infra (resource group, ADLS Gen2, Key Vault) — provisioned by Terraform
 - [x] Silver: validation, deduplication, quarantine (reconciled: 3,275 clean + 431 quarantined = 3,706)
 - [x] Gold: streaming stock aggregate + SCD Type 2 dim_product (589 rows, 300 products, invariant holds)
 - [x] Terraform: Azure infra — resource group, ADLS Gen2, Key Vault with secrets (12 resources, idempotent)
-- [ ] dbt tests + freshness alerting
+- [x] dbt: 2 models + 19 data quality tests (SCD invariant, reconciliation, quality rules) — all passing
 - [ ] CI/CD: GitHub Actions + Databricks Asset Bundles
 
 ## Week 1 milestone — Bronze ingestion
@@ -182,6 +182,38 @@ the code. One command (`terraform destroy`) can remove everything.
   On Azure Databricks, a Key Vault-backed secret scope would replace the
   constants with `dbutils.secrets.get()` calls.
 
+## Week 5 milestone — dbt data quality tests
+
+The checks that were run by hand in earlier weeks are now automated.
+dbt runs 19 tests against the real tables with one command (`dbt build`),
+and fails loudly if any rule is broken. A test in dbt is a query that
+searches for bad rows: zero rows found means PASS.
+
+The four custom tests carry the project's core rules:
+
+- **SCD invariant:** every product has exactly one current row in
+  dim_product.
+- **No overlapping versions:** a product's price history has no
+  overlapping date ranges.
+- **Reconciliation:** bronze count = clean + quarantine. This is the
+  check that caught the NULL bug in Week 2, now permanent.
+- **Quality rule:** no negative RESTOCK ever survives into the clean
+  table.
+
+The other 15 tests are column rules on sources and models: not null,
+unique, and accepted values. dbt also builds two small views:
+`low_stock_alerts` (products under 10 units) and `quarantine_summary`
+(rejected events by reason).
+
+![dbt build all passing](docs/img/dbt-build-pass.png)
+
+The lineage graph is generated automatically by dbt — it shows every
+source table flowing into its tests and models:
+
+![dbt lineage](docs/img/dbt-lineage.png)
+
+**Result: PASS=19 WARN=0 ERROR=0 in 45 seconds.**
+
 ## Design notes
 
 - **Trigger choice:** Bronze, Silver, and Gold run with `availableNow`
@@ -202,7 +234,8 @@ the code. One command (`terraform destroy`) can remove everything.
   of truth.
 - **Secrets:** Kafka credentials are now provisioned into Azure Key Vault
   via Terraform (see Week 4). The Free Edition notebooks still use
-  constants because Free Edition cannot read the vault.
+  constants because Free Edition cannot read the vault. dbt credentials
+  live in `~/.dbt/profiles.yml`, outside the repo.
 
 ## Repo structure
 
@@ -222,6 +255,10 @@ infra/
   variables.tf             # project name, region, Kafka secret inputs
   main.tf                  # resource group, ADLS Gen2, containers, Key Vault, secrets
   outputs.tf               # names and URIs printed after apply
+dbt/inventory_dbt/
+  models/sources.yml       # source tables + column rules
+  models/marts/            # low_stock_alerts, quarantine_summary views
+  tests/                   # 4 custom tests (SCD invariant, reconciliation, ...)
 docs/
   img/                     # screenshots
 ```
