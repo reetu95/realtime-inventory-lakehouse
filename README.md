@@ -3,6 +3,7 @@
 Streaming pipeline: Python producer → Kafka (Confluent Cloud) → Spark
 Structured Streaming → Delta Lake (Bronze/Silver/Gold) on Databricks.
 Azure infrastructure built with Terraform. Data quality enforced with dbt.
+Tests run automatically in CI on every push.
 
 Dimensions are seeded from the real **Online Retail II** dataset (~1M UK
 e-commerce transactions). The event stream is simulated against those real
@@ -23,6 +24,7 @@ Bronze → Silver → Gold Delta tables
 dbt tests · Power BI
 
 Azure infra (resource group, ADLS Gen2, Key Vault) — provisioned by Terraform
+CI — GitHub Actions runs all dbt tests on every push and pull request
 ```
 
 ## Event types
@@ -41,8 +43,8 @@ Azure infra (resource group, ADLS Gen2, Key Vault) — provisioned by Terraform
 - [x] Silver: validation, deduplication, quarantine (reconciled: 3,275 clean + 431 quarantined = 3,706)
 - [x] Gold: streaming stock aggregate + SCD Type 2 dim_product (589 rows, 300 products, invariant holds)
 - [x] Terraform: Azure infra — resource group, ADLS Gen2, Key Vault with secrets (12 resources, idempotent)
-- [x] dbt: 2 models + 19 data quality tests (SCD invariant, reconciliation, quality rules) — all passing
-- [ ] CI/CD: GitHub Actions + Databricks Asset Bundles
+- [x] dbt: 2 models + 20 data quality tests (SCD invariant, reconciliation, quality rules) — all passing
+- [x] CI/CD: GitHub Actions runs all dbt tests on every push and pull request
 
 ## Week 1 milestone — Bronze ingestion
 
@@ -185,11 +187,11 @@ the code. One command (`terraform destroy`) can remove everything.
 ## Week 5 milestone — dbt data quality tests
 
 The checks that were run by hand in earlier weeks are now automated.
-dbt runs 19 tests against the real tables with one command (`dbt build`),
-and fails loudly if any rule is broken. A test in dbt is a query that
-searches for bad rows: zero rows found means PASS.
+dbt runs the test suite against the real tables with one command
+(`dbt build`), and fails loudly if any rule is broken. A test in dbt is
+a query that searches for bad rows: zero rows found means PASS.
 
-The four custom tests carry the project's core rules:
+The custom tests carry the project's core rules:
 
 - **SCD invariant:** every product has exactly one current row in
   dim_product.
@@ -200,10 +202,10 @@ The four custom tests carry the project's core rules:
 - **Quality rule:** no negative RESTOCK ever survives into the clean
   table.
 
-The other 15 tests are column rules on sources and models: not null,
-unique, and accepted values. dbt also builds two small views:
-`low_stock_alerts` (products under 10 units) and `quarantine_summary`
-(rejected events by reason).
+The rest are column rules on sources and models: not null, unique, and
+accepted values. dbt also builds two small views: `low_stock_alerts`
+(products under 10 units) and `quarantine_summary` (rejected events by
+reason).
 
 ![dbt build all passing](docs/img/dbt-build-pass.png)
 
@@ -213,6 +215,23 @@ source table flowing into its tests and models:
 ![dbt lineage](docs/img/dbt-lineage.png)
 
 **Result: PASS=19 WARN=0 ERROR=0 in 45 seconds.**
+
+## Week 6 milestone — CI: the pipeline tests itself
+
+A GitHub Actions workflow runs the full dbt test suite on every push and
+every pull request. The Databricks credentials live in GitHub Secrets —
+referenced by name in the workflow, never visible in code or logs.
+
+The workflow was proven with a real pull request: a new test (movement
+types must come from the known set) was added on a branch. The PR
+triggered the suite automatically — 20 tests against the live tables —
+and the merge was gated on the green check.
+
+![CI run passing](docs/img/ci-green.png)
+![Pull request gated by tests](docs/img/ci-pr-green.png)
+
+Any change that breaks a data quality rule now turns the build red
+before it can reach main.
 
 ## Design notes
 
@@ -232,10 +251,9 @@ source table flowing into its tests and models:
 - **Bronze keeps `raw_json`:** the raw payload is kept so events can be
   re-parsed later if the schema changes. Bronze is the replayable source
   of truth.
-- **Secrets:** Kafka credentials are now provisioned into Azure Key Vault
-  via Terraform (see Week 4). The Free Edition notebooks still use
-  constants because Free Edition cannot read the vault. dbt credentials
-  live in `~/.dbt/profiles.yml`, outside the repo.
+- **Secrets:** Kafka credentials are provisioned into Azure Key Vault via
+  Terraform (see Week 4). dbt credentials live in `~/.dbt/profiles.yml`
+  locally and in GitHub Secrets for CI — never in the repo.
 
 ## Repo structure
 
@@ -258,7 +276,9 @@ infra/
 dbt/inventory_dbt/
   models/sources.yml       # source tables + column rules
   models/marts/            # low_stock_alerts, quarantine_summary views
-  tests/                   # 4 custom tests (SCD invariant, reconciliation, ...)
+  tests/                   # 5 custom tests (SCD invariant, reconciliation, ...)
+.github/workflows/
+  dbt.yml                  # CI: run all dbt tests on every push and PR
 docs/
   img/                     # screenshots
 ```
